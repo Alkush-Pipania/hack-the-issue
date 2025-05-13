@@ -1,0 +1,359 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model activity_logs {
+  id         String   @id
+  userId     String?
+  action     String
+  entityType String?
+  entityId   String?
+  details    Json?
+  ipAddress  String?
+  userAgent  String?
+  timestamp  DateTime @default(now())
+}
+
+model author_books {
+  bookId   String
+  authorId String
+  authors  authors @relation(fields: [authorId], references: [id], onDelete: Cascade)
+  books    books   @relation(fields: [bookId], references: [id], onDelete: Cascade)
+
+  @@id([bookId, authorId])
+}
+
+model authors {
+  id           String         @id
+  name         String
+  biography    String?
+  birthDate    DateTime?
+  deathDate    DateTime?
+  author_books author_books[]
+}
+
+model book_copies {
+  id                String              @id
+  bookId            String
+  copyNumber        Int
+  acquisitionDate   DateTime
+  condition         BookCondition
+  isAvailable       Boolean             @default(true)
+  notes             String?
+  books             books               @relation(fields: [bookId], references: [id], onDelete: Cascade)
+  book_transactions book_transactions[]
+
+  @@unique([bookId, copyNumber])
+}
+
+model book_recommendations {
+  id        String   @id
+  userId    String
+  bookId    String
+  score     Float
+  reason    String
+  createdAt DateTime @default(now())
+  isViewed  Boolean  @default(false)
+  books     books    @relation(fields: [bookId], references: [id])
+  users     users    @relation(fields: [userId], references: [id])
+}
+
+model book_reviews {
+  id         String   @id
+  userId     String
+  bookId     String
+  rating     Int
+  review     String?
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime
+  isApproved Boolean  @default(false)
+  books      books    @relation(fields: [bookId], references: [id])
+  users      users    @relation(fields: [userId], references: [id])
+
+  @@unique([userId, bookId])
+}
+
+model book_transactions {
+  id              String          @id
+  userId          String
+  bookId          String
+  copyId          String
+  transactionType TransactionType
+  borrowDate      DateTime
+  dueDate         DateTime
+  returnDate      DateTime?
+  renewalCount    Int             @default(0)
+  notes           String?
+  books           books           @relation(fields: [bookId], references: [id])
+  book_copies     book_copies     @relation(fields: [copyId], references: [id])
+  users           users           @relation(fields: [userId], references: [id])
+  fines           fines?
+}
+
+model books {
+  id                   String                 @id
+  title                String
+  subtitle             String?
+  isbn                 String                 @unique
+  publicationYear      Int
+  publisher            String
+  edition              String?
+  description          String?
+  pageCount            Int
+  language             String
+  coverImage           String?
+  physicalLocation     String?
+  addedAt              DateTime               @default(now())
+  updatedAt            DateTime
+  status               BookStatus             @default(AVAILABLE)
+  author_books         author_books[]
+  book_copies          book_copies[]
+  book_recommendations book_recommendations[]
+  book_reviews         book_reviews[]
+  book_transactions    book_transactions[]
+  category_books       category_books[]
+  digital_contents     digital_contents?
+  reading_list_items   reading_list_items[]
+  reservations         reservations[]
+  vector_entries       vector_entries[]
+}
+
+model categories {
+  id               String           @id
+  name             String           @unique
+  description      String?
+  parentId         String?
+  categories       categories?      @relation("categoriesTocategories", fields: [parentId], references: [id])
+  other_categories categories[]     @relation("categoriesTocategories")
+  category_books   category_books[]
+}
+
+model category_books {
+  bookId     String
+  categoryId String
+  books      books      @relation(fields: [bookId], references: [id], onDelete: Cascade)
+  categories categories @relation(fields: [categoryId], references: [id], onDelete: Cascade)
+
+  @@id([bookId, categoryId])
+}
+
+model digital_contents {
+  id               String           @id
+  bookId           String           @unique
+  fileUrl          String
+  fileFormat       String
+  fileSize         Int
+  uploadDate       DateTime         @default(now())
+  isProcessed      Boolean          @default(false)
+  processingStatus ProcessingStatus @default(PENDING)
+  books            books            @relation(fields: [bookId], references: [id], onDelete: Cascade)
+}
+
+model fines {
+  id                String            @id
+  userId            String
+  transactionId     String            @unique
+  amount            Decimal           @db.Decimal(10, 2)
+  reason            String
+  dateIssued        DateTime          @default(now())
+  datePaid          DateTime?
+  status            FineStatus        @default(PENDING)
+  book_transactions book_transactions @relation(fields: [transactionId], references: [id])
+  users             users             @relation(fields: [userId], references: [id])
+}
+
+model notifications {
+  id        String           @id
+  userId    String
+  type      NotificationType
+  title     String
+  message   String
+  isRead    Boolean          @default(false)
+  createdAt DateTime         @default(now())
+  users     users            @relation(fields: [userId], references: [id], onDelete: Cascade)
+}
+
+model reading_list_items {
+  id            String        @id
+  readingListId String
+  bookId        String
+  addedAt       DateTime      @default(now())
+  notes         String?
+  books         books         @relation(fields: [bookId], references: [id])
+  reading_lists reading_lists @relation(fields: [readingListId], references: [id], onDelete: Cascade)
+
+  @@unique([readingListId, bookId])
+}
+
+model reading_lists {
+  id                 String               @id
+  userId             String
+  name               String
+  description        String?
+  isPublic           Boolean              @default(false)
+  createdAt          DateTime             @default(now())
+  updatedAt          DateTime
+  reading_list_items reading_list_items[]
+  users              users                @relation(fields: [userId], references: [id], onDelete: Cascade)
+}
+
+model reading_preferences {
+  id            String @id
+  userId        String
+  categoryId    String
+  interestLevel Int
+  users         users  @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, categoryId])
+}
+
+model reservations {
+  id               String            @id
+  userId           String
+  bookId           String
+  reservationDate  DateTime          @default(now())
+  expiryDate       DateTime
+  status           ReservationStatus @default(ACTIVE)
+  notificationSent Boolean           @default(false)
+  books            books             @relation(fields: [bookId], references: [id])
+  users            users             @relation(fields: [userId], references: [id])
+}
+
+model search_queries {
+  id        String   @id
+  userId    String
+  query     String
+  timestamp DateTime @default(now())
+  results   Int
+  users     users    @relation(fields: [userId], references: [id], onDelete: Cascade)
+}
+
+model staff_profiles {
+  id          String   @id
+  userId      String   @unique
+  staffId     String   @unique
+  department  String
+  position    String
+  joiningDate DateTime
+  users       users    @relation(fields: [userId], references: [id], onDelete: Cascade)
+}
+
+model student_profiles {
+  id             String   @id
+  userId         String   @unique
+  studentId      String   @unique
+  department     String
+  course         String
+  year           Int
+  enrollmentDate DateTime
+  graduationYear Int?
+  users          users    @relation(fields: [userId], references: [id], onDelete: Cascade)
+}
+
+model system_settings {
+  id          String   @id
+  key         String   @unique
+  value       String
+  description String?
+  updatedAt   DateTime
+}
+
+model users {
+  id                   String                 @id
+  email                String                 @unique
+  passwordHash         String
+  role                 UserRole               @default(STUDENT)
+  firstName            String
+  lastName             String
+  profilePicture       String?
+  createdAt            DateTime               @default(now())
+  updatedAt            DateTime
+  isActive             Boolean                @default(true)
+  book_recommendations book_recommendations[]
+  book_reviews         book_reviews[]
+  book_transactions    book_transactions[]
+  fines                fines[]
+  notifications        notifications[]
+  reading_lists        reading_lists[]
+  reading_preferences  reading_preferences[]
+  reservations         reservations[]
+  search_queries       search_queries[]
+  staff_profiles       staff_profiles?
+  student_profiles     student_profiles?
+}
+
+model vector_entries {
+  id         String   @id
+  bookId     String
+  chunkIndex Int
+  chunkText  String
+  vectorId   String
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime
+  books      books    @relation(fields: [bookId], references: [id], onDelete: Cascade)
+
+  @@unique([bookId, chunkIndex])
+}
+
+enum BookCondition {
+  NEW
+  GOOD
+  FAIR
+  POOR
+  DAMAGED
+}
+
+enum BookStatus {
+  AVAILABLE
+  RESERVED
+  ON_LOAN
+  UNDER_MAINTENANCE
+  LOST
+}
+
+enum FineStatus {
+  PENDING
+  PAID
+  WAIVED
+}
+
+enum NotificationType {
+  DUE_DATE_REMINDER
+  OVERDUE_NOTICE
+  FINE_NOTICE
+  RESERVATION_AVAILABLE
+  BOOK_RETURNED
+  SYSTEM_ANNOUNCEMENT
+}
+
+enum ProcessingStatus {
+  PENDING
+  PROCESSING
+  COMPLETED
+  FAILED
+}
+
+enum ReservationStatus {
+  ACTIVE
+  FULFILLED
+  EXPIRED
+  CANCELLED
+}
+
+enum TransactionType {
+  BORROW
+  RETURN
+  RENEWAL
+  LOST
+}
+
+enum UserRole {
+  STUDENT
+  LIBRARIAN
+  ADMIN
+}
